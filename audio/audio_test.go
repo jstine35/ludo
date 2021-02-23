@@ -19,6 +19,15 @@ func Test_Sample(t *testing.T) {
 	})
 }
 
+// Requires operational audio drive or else it'll deadlock.
+/*
+func Test_Overfill(t *testing.T) {
+	t.Run("Overfill Audio Queue", func(t *testing.T) {
+		SampleBatch(make([]byte, 2192 * 4), 2192 * 4)
+	})
+}
+*/
+
 func Test_fillInternalBuf(t *testing.T) {
 	Reconfigure(48000)
 	type args struct {
@@ -49,7 +58,7 @@ func Test_fillInternalBuf(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := fillInternalBuf(tt.args.buf, tt.args.size); got != tt.want {
+			if got := fillInternalBuf(tt.args.buf[:tt.args.size]); got != tt.want {
 				t.Errorf("fillInternalBuf() = %v, want %v", got, tt.want)
 			}
 		})

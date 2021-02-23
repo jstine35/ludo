@@ -6,7 +6,9 @@ import (
 	"log"
 	"path/filepath"
 	"time"
-
+    "fmt"
+    "unsafe"
+    
 	"github.com/libretro/ludo/settings"
 	"github.com/libretro/ludo/state"
 	"github.com/libretro/ludo/utils"
@@ -22,7 +24,6 @@ var audio struct {
 	numBuffers int32
 	tmpBuf     [bufSize]byte
 	tmpBufPtr  int32
-	bufPtr     int32
 	resPtr     int32
 }
 
@@ -94,7 +95,6 @@ func alGetBuffer() al.Buffer {
 			if alUnqueueBuffers() {
 				break
 			}
-
 			time.Sleep(time.Millisecond)
 		}
 	}
@@ -103,12 +103,10 @@ func alGetBuffer() al.Buffer {
 	return audio.buffers[audio.resPtr]
 }
 
-func fillInternalBuf(buf []byte, size int32) int32 {
-	readSize := min(bufSize-audio.tmpBufPtr, size)
-	if readSize > int32(len(buf)) {
-		return size
-	}
-	copy(audio.tmpBuf[audio.tmpBufPtr:], buf[audio.bufPtr:audio.bufPtr+readSize])
+func fillInternalBuf(buf []byte) int32 {
+	readSize := min(bufSize-audio.tmpBufPtr, int32(len(buf)))
+    fmt.Printf("readSize=%d bufsz=%d tmp=%d, len=%d\n", readSize, bufSize, audio.tmpBufPtr, int32(len(buf)))
+	copy(audio.tmpBuf[audio.tmpBufPtr:], buf[:readSize])
 	audio.tmpBufPtr += readSize
 	return readSize
 }
@@ -119,13 +117,12 @@ func write(buf []byte, size int32) int32 {
 	if state.Global.FastForward {
 		return size
 	}
-
+	
 	for size > 0 {
 
-		rc := fillInternalBuf(buf, size)
+		rc := fillInternalBuf(buf[written:])
 
 		written += rc
-		audio.bufPtr += rc
 		size -= rc
 
 		if audio.tmpBufPtr != bufSize {
@@ -138,12 +135,10 @@ func write(buf []byte, size int32) int32 {
 		audio.tmpBufPtr = 0
 		audio.source.QueueBuffers(buffer)
 
-		if audio.source.State() != al.Playing {
+        if audio.source.State() != al.Playing {
 			al.PlaySources(audio.source)
 		}
 	}
-
-	audio.bufPtr = 0
 
 	return written
 }
@@ -151,8 +146,9 @@ func write(buf []byte, size int32) int32 {
 // Sample renders a single audio frame.
 // It is passed as a callback to the libretro implementation.
 func Sample(left int16, right int16) {
-	buf := []byte{byte(left), byte(right)}
-	write(buf, 4)
+	buf := []int16{left, right}
+    pi := (*[4]byte)(unsafe.Pointer(&buf[0]))
+	write((*pi)[:], 4)
 }
 
 // SampleBatch renders multiple audio frames in one go
